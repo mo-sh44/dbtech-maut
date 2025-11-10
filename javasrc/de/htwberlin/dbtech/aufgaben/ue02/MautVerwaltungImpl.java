@@ -15,8 +15,7 @@ import de.htwberlin.dbtech.exceptions.DataException;
 
 /**
  * Die Klasse realisiert die Mautverwaltung.
- *
- * @author Patrick Dohmeier
+ ** @author Patrick Dohmeier
  */
 public class MautVerwaltungImpl implements IMautVerwaltung {
 
