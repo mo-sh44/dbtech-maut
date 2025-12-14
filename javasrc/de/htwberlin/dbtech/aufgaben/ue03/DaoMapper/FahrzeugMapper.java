@@ -2,122 +2,77 @@ package de.htwberlin.dbtech.aufgaben.ue03.DaoMapper;
 
 import de.htwberlin.dbtech.aufgaben.ue03.TableObjects.Fahrzeug;
 import de.htwberlin.dbtech.exceptions.DataException;
+import de.htwberlin.dbtech.exceptions.UnkownVehicleException;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
-/**
- * Data-Mapper fuer die Tabelle FAHRZEUG (und Zugriff ueber Kennzeichen).
- */
 public class FahrzeugMapper {
-
     private Connection connection;
 
     public FahrzeugMapper(Connection connection) {
         this.connection = connection;
     }
 
-    public void setConnection(Connection connection) {
-        this.connection = connection;
-    }
-
     private Connection getConnection() {
         if (connection == null) {
-            throw new DataException("Connection not set");
+            throw new DataException("Connection nicht gesetzt");
         }
         return connection;
     }
 
     /**
-     * Prueft, ob ein Fahrzeug im System bekannt ist.
-     * Entweder als registriertes Fahrzeug oder ueber eine Buchung.
+     * Liefert das Fahrzeug-Objekt, wenn es aktiv registriert ist,
+     * inklusive Achsen und Schadstoffklasse (SSKL_ID).
      */
-    public boolean isFahrzeugBekannt(String kennzeichen) {
-        // 1) Direkt in der FAHRZEUG-Tabelle nachschauen
-        if (existsInFahrzeugTable(kennzeichen)) {
-            return true;
-        }
+    public Fahrzeug getVehicleByKennzeichen(String kennzeichen) throws UnkownVehicleException {
+        // WICHTIG: Verwenden Sie Großbuchstaben für Tabellen-/Spaltennamen in Oracle
+        final String sql = "SELECT FZ_ID, ACHSEN, SSKL_ID FROM FAHRZEUG WHERE KENNZEICHEN = ? AND ABMELDEDATUM IS NULL";
 
-        // 2) Sonst ueber Buchungen (manuelles Verfahren) pruefen
-        BuchungMapper buchungMapper = new BuchungMapper(getConnection());
-        return buchungMapper.hasAnyBuchung(kennzeichen);
-    }
+        try (PreparedStatement statement = getConnection().prepareStatement(sql)) {
+            statement.setString(1, kennzeichen);
 
-    private boolean existsInFahrzeugTable(String kennzeichen) {
-        String sql = "SELECT 1 FROM FAHRZEUG WHERE KENNZEICHEN = ?";
-
-        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
-            ps.setString(1, kennzeichen);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException e) {
-            throw new DataException("Fehler bei existsInFahrzeugTable", e);
-        }
-    }
-
-    /**
-     * Liefert die Achszahl fuer ein Kennzeichen.
-     *  - Wenn Fahrzeug registriert ist: Achsen aus FAHRZEUG-Tabelle.
-     *  - Sonst: Achsen aus einer offenen Buchung (ueber BuchungMapper),
-     *            default ist der uebergebene Wert.
-     */
-    public int ermittleAchsen(String kennzeichen, int gemeldeteAchsen) {
-        String sql = "SELECT ACHSEN FROM FAHRZEUG WHERE KENNZEICHEN = ?";
-
-        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
-            ps.setString(1, kennzeichen);
-
-            try (ResultSet rs = ps.executeQuery()) {
+            try (ResultSet rs = statement.executeQuery()) {
                 if (rs.next()) {
-                    // Achszahl direkt vom Fahrzeug
-                    return rs.getInt("ACHSEN");
+                    Fahrzeug fahrzeug = new Fahrzeug();
+                    // ACHTUNG: Hier werden die neuen Setters verwendet
+                    fahrzeug.setFzgId(rs.getLong("FZ_ID"));
+                    fahrzeug.setAchsen(rs.getInt("ACHSEN"));
+                    fahrzeug.setSsklId(rs.getInt("SSKL_ID"));
+                    return fahrzeug;
+                } else {
+                    throw new UnkownVehicleException("Fahrzeug ist nicht aktiv registriert.");
                 }
             }
         } catch (SQLException e) {
-            throw new DataException("Fehler beim Lesen der Achszahl aus FAHRZEUG", e);
+            throw new DataException("Fehler beim Abrufen der Fahrzeugdaten: " + e.getMessage(), e);
         }
-
-        // Wenn das Fahrzeug nicht in FAHRZEUG steht, ggf. aus einer Buchung holen
-        BuchungMapper buchungMapper = new BuchungMapper(getConnection());
-        return buchungMapper.getAchsenAusOffenerBuchung(kennzeichen, gemeldeteAchsen);
     }
 
     /**
-     * Liefert ein Fahrzeug-Objekt, falls fuer das Kennzeichen ein Fahrzeuggeraet
-     * (On-Board-Unit) eingetragen ist. Sonst null.
+     * Liefert ein Fahrzeug-Objekt (oder null), falls ein aktives Fahrzeuggeraet (OBU)
+     * fuer das Kennzeichen eingetragen ist.
      */
     public Fahrzeug findFahrzeugMitGeraet(String kennzeichen) {
-        String sql =
-                "SELECT f2.* " +
-                        "FROM FAHRZEUGGERAET fg " +
-                        "JOIN FAHRZEUG f2 ON fg.FZ_ID = f2.FZ_ID " +
-                        "WHERE f2.KENNZEICHEN = ?";
+        final String sql = "SELECT f.FZ_ID FROM FAHRZEUG f " +
+                "JOIN FAHRZEUGGERAET fg ON f.FZ_ID = fg.FZ_ID " +
+                "WHERE f.KENNZEICHEN = ? AND f.ABMELDEDATUM IS NULL";
 
-        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
-            ps.setString(1, kennzeichen);
+        try (PreparedStatement statement = getConnection().prepareStatement(sql)) {
+            statement.setString(1, kennzeichen);
 
-            try (ResultSet rs = ps.executeQuery()) {
+            try (ResultSet rs = statement.executeQuery()) {
                 if (rs.next()) {
-
-                    return new Fahrzeug(
-                            rs.getLong(1),
-                            rs.getInt(2),
-                            rs.getInt(3),
-                            rs.getString(4),
-                            rs.getString(5),
-                            rs.getInt(6),
-                            rs.getInt(7),
-                            rs.getDate(8),
-                            rs.getDate(9),
-                            rs.getString(10)
-                    );
+                    Fahrzeug fahrzeug = new Fahrzeug();
+                    fahrzeug.setFzgId(rs.getLong("FZ_ID"));
+                    return fahrzeug;
                 }
             }
         } catch (SQLException e) {
-            throw new DataException("Fehler bei findFahrzeugMitGeraet", e);
+            throw new DataException("Fehler beim Prüfen des Fahrzeuggeräts: " + e.getMessage(), e);
         }
-
-        return null;
+        return null; // Kein Gerät gefunden
     }
 }

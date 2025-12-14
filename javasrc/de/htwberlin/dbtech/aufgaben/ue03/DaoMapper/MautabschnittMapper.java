@@ -28,6 +28,14 @@ public class MautabschnittMapper {
     }
 
     /**
+     * Öffentliche Methode, die vom MautServiceImpl aufgerufen wird.
+     * Entspricht der Vorgabe aus der Lösung deines Freundes.
+     */
+    public void FahrtVerbuchen(int abschnittId, int achszahl, String kennzeichen) {
+        verbucheAutomatischeFahrt(abschnittId, achszahl, kennzeichen);
+    }
+
+    /**
      * Bucht eine automatische Fahrt mit On-Board-Geraet:
      *  - liest Schadstoffklasse und Fahrzeug-ID
      *  - bestimmt Mautkategorie und Satz pro km
@@ -36,12 +44,12 @@ public class MautabschnittMapper {
      */
     public void verbucheAutomatischeFahrt(int abschnittId, int achszahl, String kennzeichen) {
         try {
-            // 1) Fahrzeug-Daten ermitteln (Schadstoffklasse + FZ_ID)
+            // 1) Fahrzeug-Daten ermitteln (Schadstoffklasse + FZG_ID/FZ_ID)
             FahrzeugInfo fahrzeugInfo = ladeFahrzeugInfo(kennzeichen);
 
-            // Falls nix gefunden -> DataException (oder eigene Exception, je nach Aufgabe)
             if (fahrzeugInfo == null) {
-                throw new DataException("Fahrzeug mit Kennzeichen " + kennzeichen + " nicht gefunden oder ohne Geraet");
+                throw new DataException("Fahrzeug mit Kennzeichen " + kennzeichen +
+                        " nicht gefunden oder ohne Geraet");
             }
 
             int effektiveAchsen = Math.min(achszahl, 5); // Kategorien sind bis ">=5"
@@ -59,16 +67,20 @@ public class MautabschnittMapper {
             int laenge = ladeAbschnittsLaenge(abschnittId);
 
             // 4) Kosten berechnen
-            // Annahme: laenge in Metern, satz in Cent / km
-            // => Euro = (laenge [m] * satz [Cent/km]) / (100 Cent * 1000 m/km)
+            // laenge in m, Satz in Cent/km -> Euro = (m * Cent/km) / (100 * 1000)
             double kosten = (laenge * kategorieInfo.mautsatzJeKm()) / 100_000.0;
 
             // 5) neue MAUT_ID bestimmen
             int mautId = ermittleNaechsteMautId();
 
             // 6) Eintrag in MAUTERHEBUNG einfügen
-            fuegeMauterhebungEin(mautId, abschnittId, fahrzeugInfo.fahrzeugId(),
-                    kategorieInfo.kategorieId(), kosten);
+            fuegeMauterhebungEin(
+                    mautId,
+                    abschnittId,
+                    fahrzeugInfo.fahrzeugId(),
+                    kategorieInfo.kategorieId(),
+                    kosten
+            );
 
         } catch (SQLException e) {
             throw new DataException("Fehler beim Verbuchen der Fahrt", e);
@@ -79,10 +91,11 @@ public class MautabschnittMapper {
 
     private FahrzeugInfo ladeFahrzeugInfo(String kennzeichen) throws SQLException {
         String sql =
-                "SELECT f.SSKL_ID, fg.FZG_ID " +
-                        "FROM FAHRZEUG f " +
-                        "JOIN FAHRZEUGGERAET fg ON f.FZ_ID = fg.FZ_ID " +
-                        "WHERE f.KENNZEICHEN = ?";
+                "SELECT f.SSKL_ID, fg.FZ_ID " +  // ggf. FZ_ID/FZG_ID anpassen je nach Schema
+                        "FROM Fahrzeug f " +
+                        "JOIN Fahrzeuggerat fg ON f.FZ_ID = fg.FZ_ID " +
+                        "WHERE f.Kennzeichen = ? " +
+                        "AND f.Abmeldedatum IS NULL";
 
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
             ps.setString(1, kennzeichen);
@@ -146,9 +159,11 @@ public class MautabschnittMapper {
                                       long fahrzeugId,
                                       int kategorieId,
                                       double kosten) throws SQLException {
+        // Spalten entsprechend deinem Schema:
+        // MAUT_ID, ABSCHNITTS_ID, FZG_ID/FZ_ID, KATEGORIE_ID, BEFAHRUNGSDATUM, KOSTEN
         String sql =
                 "INSERT INTO MAUTERHEBUNG " +
-                        "(MAUT_ID, ABSCHNITTS_ID, FZG_ID, KATEGORIE_ID, DATUM, BETRAG) " +
+                        "(MAUT_ID, ABSCHNITTS_ID, FZG_ID, KATEGORIE_ID, BEFAHRUNGSDATUM, KOSTEN) " +
                         "VALUES (?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
