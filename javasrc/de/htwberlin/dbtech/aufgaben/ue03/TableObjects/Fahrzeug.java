@@ -14,6 +14,11 @@ public class Fahrzeug {
     private Date ABMELDEDATUM;
     private String ZULASSUNGSLAND;
 
+    // Standardkonstruktor für Mappers
+    public Fahrzeug() {
+    }
+
+    // Konstruktor
     public Fahrzeug(long FZ_ID, int SSKL_ID, int NUTZER_ID, String KENNZEICHEN, String FIN, int ACHSEN, int GEWICHT, Date ANMELDEDATUM, Date ABMELDEDATUM, String ZULASSUNGSLAND) {
         this.FZ_ID = FZ_ID;
         this.SSKL_ID = SSKL_ID;
@@ -27,83 +32,125 @@ public class Fahrzeug {
         this.ZULASSUNGSLAND = ZULASSUNGSLAND;
     }
 
-    public void setFZ_ID(long FZ_ID) {
-        this.FZ_ID = FZ_ID;
-    }
+    // =======================================================
+    // GETTERS (Korrigierte CamelCase-Versionen)
+    // =======================================================
 
-    public void setSSKL_ID(int SSKL_ID) {
-        this.SSKL_ID = SSKL_ID;
-    }
-
-    public void setNUTZER_ID(int NUTZER_ID) {
-        this.NUTZER_ID = NUTZER_ID;
-    }
-
-    public void setKENNZEICHEN(String KENNZEICHEN) {
-        this.KENNZEICHEN = KENNZEICHEN;
-    }
-
-    public void setFIN(String FIN) {
-        this.FIN = FIN;
-    }
-
-    public void setACHSEN(int ACHSEN) {
-        this.ACHSEN = ACHSEN;
-    }
-
-    public void setGEWICHT(int GEWICHT) {
-        this.GEWICHT = GEWICHT;
-    }
-
-    public void setANMELDEDATUM(Date ANMELDEDATUM) {
-        this.ANMELDEDATUM = ANMELDEDATUM;
-    }
-
-    public void setABMELDEDATUM(Date ABMELDEDATUM) {
-        this.ABMELDEDATUM = ABMELDEDATUM;
-    }
-
-    public void setZULASSUNGSLAND(String ZULASSUNGSLAND) {
-        this.ZULASSUNGSLAND = ZULASSUNGSLAND;
-    }
-
-    public long getFZ_ID() {
+    // FZ_ID
+    public long getFzgId() {
         return FZ_ID;
     }
 
-    public int getSSKL_ID() {
+    // ACHSEN
+    public int getAchsen() {
+        return ACHSEN;
+    }
+
+    // SSKL_ID
+    public int getSsklId() {
         return SSKL_ID;
     }
 
-    public int getNUTZER_ID() {
-        return NUTZER_ID;
-    }
 
-    public String getKENNZEICHEN() {
-        return KENNZEICHEN;
-    }
-
-    public String getFIN() {
-        return FIN;
+    public long getFZ_ID() {
+        return FZ_ID;
     }
 
     public int getACHSEN() {
         return ACHSEN;
     }
 
+    public int getSSKL_ID() {
+        return SSKL_ID;
+    }
+
+
+    // =======================================================
+    // SETTERS (Korrigierte CamelCase-Versionen)
+    // =======================================================
+
+    // FZ_ID
+    public void setFzgId(long FZ_ID) {
+        this.FZ_ID = FZ_ID;
+    }
+
+    // ACHSEN
+    public void setAchsen(int ACHSEN) {
+        this.ACHSEN = ACHSEN;
+    }
+
+    // SSKL_ID
+    public void setSsklId(int SSKL_ID) {
+        this.SSKL_ID = SSKL_ID;
+    }
+
+
+    public void setFZ_ID(long FZ_ID) {
+        this.FZ_ID = FZ_ID;
+    }
+
+    public void setACHSEN(int ACHSEN) {
+        this.ACHSEN = ACHSEN;
+    }
+
+    public void setSSKL_ID(int SSKL_ID) {
+        this.SSKL_ID = SSKL_ID;
+    }
+
+
+    public int getNUTZER_ID() {
+        return NUTZER_ID;
+    }
+
+    public void setNUTZER_ID(int NUTZER_ID) {
+        this.NUTZER_ID = NUTZER_ID;
+    }
+
+    public String getKENNZEICHEN() {
+        return KENNZEICHEN;
+    }
+
+    public void setKENNZEICHEN(String KENNZEICHEN) {
+        this.KENNZEICHEN = KENNZEICHEN;
+    }
+
+    public String getFIN() {
+        return FIN;
+    }
+
+    public void setFIN(String FIN) {
+        this.FIN = FIN;
+    }
+
     public int getGEWICHT() {
         return GEWICHT;
+    }
+
+    public void setGEWICHT(int GEWICHT) {
+        this.GEWICHT = GEWICHT;
     }
 
     public Date getANMELDEDATUM() {
         return ANMELDEDATUM;
     }
 
+    public void setANMELDEDATUM(Date ANMELDEDATUM) {
+        this.ANMELDEDATUM = ANMELDEDATUM;
+    }
+
     public Date getABMELDEDATUM() {
         return ABMELDEDATUM;
     }
 
+    public void setABMELDEDATUM(Date ABMELDEDATUM) {
+        this.ABMELDEDATUM = ABMELDEDATUM;
+    }
+
     public String getZULASSUNGSLAND() {
         return ZULASSUNGSLAND;
+    }
+
+    public void setZULASSUNGSLAND(String ZULASSUNGSLAND) {
+        this.ZULASSUNGSLAND = ZULASSUNGSLAND;
     }
 }
