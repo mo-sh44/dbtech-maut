@@ -1,23 +1,159 @@
 create or replace package body maut_service as
 
-  procedure test(
-    p_mautabschnitt mautabschnitt.abschnitts_id%type
-  ) as
-  begin
-    dbms_output.put_line('test');
-    dbms_output.put_line(p_mautabschnitt);
-  end test;
-
   -----------------------------------------------------------------------------
   -- berechnemaut
+  -- Implementiert die Mautberechnung für Fahrzeuge im automatischen und
+  -- manuellen Verfahren. Die Logik entspricht der Java-Implementierung
+  -- in MautServiceImpl.
   -----------------------------------------------------------------------------
   procedure berechnemaut(
     p_mautabschnitt mautabschnitt.abschnitts_id%type,
     p_achszahl fahrzeug.achsen%type,
     p_kennzeichen fahrzeug.kennzeichen%type
   ) as
+    v_fz_id Number;
+    v_fzg_id Number;
+    v_db_achsen Number;
+    v_is_auto Boolean := false;
+    v_is_manual Boolean := false;
+    v_cnt Number;
+    
+    v_len mautabschnitt.laenge%type;
+    v_kategorie_id mautkategorie.kategorie_id%type;
+    v_mautsatz mautkategorie.mautsatz_je_km%type;
+    v_kosten mauterhebung.kosten%type;
+    v_next_id mauterhebung.maut_id%type;
+    
+    v_achsen_str mautkategorie.achszahl%type;
+    v_achsen_num Number;
   begin
-    test(p_mautabschnitt);
+    
+    -- 1. Identifikation: Automatisch?
+    begin
+        SELECT f.fz_id, fg.fzg_id, f.achsen
+        INTO v_fz_id, v_fzg_id, v_db_achsen
+        FROM fahrzeug f
+        JOIN fahrzeuggerat fg ON f.fz_id = fg.fz_id
+        WHERE f.kennzeichen = p_kennzeichen
+          AND f.abmeldedatum IS NULL;
+          
+        v_is_auto := true;
+    exception
+        when no_data_found then
+            v_is_auto := false;
+    end;
+    
+    -- 2. Identifikation: Manuell? (Falls nicht automatisch)
+    if not v_is_auto then
+        SELECT count(*)
+        INTO v_cnt
+        FROM buchung
+        WHERE kennzeichen = p_kennzeichen
+          AND abschnitts_id = p_mautabschnitt;
+          
+        if v_cnt > 0 then
+            v_is_manual := true;
+        end if;
+    end if;
+    
+    -- Kein Verfahren gefunden -> Fehler
+    if not v_is_auto and not v_is_manual then
+        raise unkown_vehicle;
+    end if;
+    
+    -- 3. Verarbeitung Automatisches Verfahren
+    if v_is_auto then
+        -- Achszahl prüfen
+        if v_db_achsen != p_achszahl then
+            raise invalid_vehicle_data;
+        end if;
+        
+        -- Doppelbefahrung prüfen
+        SELECT count(*)
+        INTO v_cnt
+        FROM mauterhebung
+        WHERE fzg_id = v_fzg_id
+          AND abschnitts_id = p_mautabschnitt;
+          
+        if v_cnt > 0 then
+            raise already_cruised;
+        end if;
+        
+        -- Daten ermitteln (Länge, Tarif)
+        SELECT laenge INTO v_len
+        FROM mautabschnitt
+        WHERE abschnitts_id = p_mautabschnitt;
+        
+        -- Tarif ermitteln (entspricht Java logic mit LIKE)
+        begin
+            SELECT mk.kategorie_id, mk.mautsatz_je_km
+            INTO v_kategorie_id, v_mautsatz
+            FROM fahrzeug f
+            JOIN mautkategorie mk ON f.sskl_id = mk.sskl_id
+            WHERE f.kennzeichen = p_kennzeichen
+              AND f.abmeldedatum IS NULL
+              AND mk.achszahl LIKE '%' || p_achszahl;
+        exception 
+            when no_data_found then
+                raise invalid_vehicle_data;
+        end;
+        
+        -- Kosten berechnen: (Länge/1000 * Mautsatz)/100 -> auf 2 Dezimalstellen
+        v_kosten := round(((v_len / 1000.0) * v_mautsatz) / 100.0, 2);
+        
+        -- Neue ID generieren (Max + 1)
+        SELECT coalesce(max(maut_id), 0) + 1 INTO v_next_id FROM mauterhebung;
+        
+        -- Speichern
+        INSERT INTO mauterhebung (MAUT_ID, ABSCHNITTS_ID, FZG_ID, KATEGORIE_ID, KOSTEN, BEFAHRUNGSDATUM)
+        VALUES (v_next_id, p_mautabschnitt, v_fzg_id, v_kategorie_id, v_kosten, trunc(sysdate));
+        
+    -- 4. Verarbeitung Manuelles Verfahren
+    else
+        -- Versuche offene Buchung zu holen (B_ID = 1)
+        begin
+            SELECT mk.achszahl
+            INTO v_achsen_str
+            FROM buchung b
+            JOIN mautkategorie mk ON b.kategorie_id = mk.kategorie_id
+            WHERE b.abschnitts_id = p_mautabschnitt
+              AND b.kennzeichen = p_kennzeichen
+              AND b.b_id = 1;
+
+            -- Achsen parsen (nur Ziffern extrahieren) - entspricht Java logic
+            v_achsen_num := to_number(regexp_substr(v_achsen_str, '\d+'));
+            
+            -- Achszahl prüfen (direkter Vergleich wie in Java)
+            if v_achsen_num != p_achszahl then
+                raise invalid_vehicle_data;
+            end if;
+            
+            -- Buchung entwerten (Status 3, Datum setzen)
+            UPDATE buchung
+            SET b_id = 3, befahrungsdatum = trunc(sysdate)
+            WHERE abschnitts_id = p_mautabschnitt
+              AND kennzeichen = p_kennzeichen
+              AND b_id = 1;
+              
+        exception
+            when no_data_found then
+                -- Keine offene Buchung gefunden (trotz manuellem Verfahren) -> Check auf abgeschlossen
+                SELECT count(*)
+                INTO v_cnt
+                FROM buchung
+                WHERE abschnitts_id = p_mautabschnitt
+                  AND kennzeichen = p_kennzeichen
+                  AND b_id = 3;
+                  
+                if v_cnt > 0 then
+                    raise already_cruised;
+                else
+                    -- Weder offen (1) noch abgeschlossen (3) -> z.B. storniert? Fehler.
+                    raise unkown_vehicle;
+                end if;
+        end;
+    end if;
+    
   end berechnemaut;
   
 end maut_service;
